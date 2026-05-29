@@ -12,6 +12,26 @@
     --tp: #e8edf5; --ts: #7a8aaa; --tm: #4a5568;
     --r: 12px; --tr: 0.2s ease;
   }
+
+  /* Keyvault (BYOK) encryption label in bundle card */
+  .bundle-svc-sublabel {
+    font-size: 0.58rem; color: #00c2ff; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    margin-top: 2px; line-height: 1.2; text-align: center;
+  }
+
+  /* Keyvault (BYOK) auto-lock badge in neXtollo */
+  .byok-lock-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.67rem; font-weight: 600; letter-spacing: 0.05em;
+    color: #4a5568; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 100px; padding: 5px 11px; cursor: default; white-space: nowrap;
+  }
+  .byok-lock-badge.active {
+    color: #00e5b0; background: rgba(0,229,176,0.08);
+    border-color: rgba(0,229,176,0.28);
+  }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--tp); min-height: 100vh; }
@@ -381,6 +401,8 @@
   }
   .svc-qty-select:focus { border-color: var(--nxt); }
   .svc-qty-select option { background: #141d35; color: var(--tp); }
+  .svc-qty-select.ext-select { background: rgba(0,194,255,0.08); border-color: rgba(0,194,255,0.3); }
+  .svc-qty-select.ext-select:focus { border-color: var(--ext); }
 
 
   /* ── DISCLAIMER ── */
@@ -518,14 +540,14 @@
 const EXT = [
   "Databricks","Storage account","Data Factory","SQL Database","Cosmos Database",
   "Automation Account","Webapp","Function app","Kubernetes","Container Registry",
-  "Log Analytics","Virtual Machines (Secure VM)","Keyvault","Azure OpenAI",
+  "Log Analytics","Virtual Machines (Secure VM)","Keyvault","Keyvault (BYOK)","Azure OpenAI",
   "Azure AI Search","Azure Document Intelligence","PowerBI Fabric Shared",
   "PowerBI Fabric Dedicated","Data Science Virtual Machine"
 ];
 const NXT = [
   "Databricks","Storage account","Data Factory","SQL Database","Cosmos Database",
   "Postgres Database","Webapp","Function app","Kubernetes","Container Registry",
-  "Log Analytics","Keyvault","Azure OpenAI","Azure AI Search",
+  "Log Analytics","Keyvault","Keyvault (BYOK)","Azure OpenAI","Azure AI Search",
   "Azure AI Document Intelligence","Azure Machine Learning",
   "Azure AI Content Safety","Azure AI Language","PowerBI Fabric Shared",
   "Azure Data Explorer","Microsoft Fabric"
@@ -547,6 +569,7 @@ const ICON_MAP = {
   "Log Analytics":                     "Log%20Analytics%20workspaces.svg",
   "Virtual Machines (Secure VM)":      "Virtual%20machines.svg",
   "Keyvault":                          "Key%20vaults.svg",
+  "Keyvault (BYOK)":                   "Key%20vaults.svg",
   "Azure OpenAI":                      "Cognitive%20Services.svg",
   "Azure AI Search":                   "Search%20services.svg",
   "Azure Document Intelligence":       "Cognitive%20Services.svg",
@@ -599,8 +622,39 @@ const qty = {
 const nxtQty = {};
 NXT.forEach(s => { nxtQty[s] = 1; });
 
+// eXtollo per-service quantities for services that support it
+const EXT_QTY_SERVICES = ['SQL Database','Webapp','Function app','Virtual Machines (Secure VM)','Data Science Virtual Machine'];
+const extQty = {};
+EXT_QTY_SERVICES.forEach(s => { extQty[s] = 1; });
+
+// PowerBI Fabric Shared state (eXtollo only)
+const pbiState = {
+  sku: 170,       // 170=2CU, 340=4CU, 680=8CU
+  licenseType: 'free',  // 'free' or 'pro'
+  licenseCount: 1
+};
+// PowerBI Fabric Dedicated state (eXtollo only)
+// SKUs: F64=5000€/mo (60000€/yr), F128=8000€/mo (96000€/yr), F256=14000€/mo (168000€/yr)
+const pbiDedState = {
+  sku: 5000,      // monthly cost: 5000=F64, 8000=F128, 14000=F256
+  licenseType: 'free',
+  licenseCount: 1
+};
+// PowerBI Fabric Shared state (neXtollo)
+const nxtPbiShState = {
+  sku: 170,       // 170=2CU, 340=4CU, 680=8CU
+  licenseType: 'free',
+  licenseCount: 1
+};
+// Microsoft Fabric state (neXtollo) — same SKU structure as PowerBI Fabric Dedicated
+const nxtFabricState = {
+  sku: 5000,      // monthly cost: 5000=F64, 8000=F128, 14000=F256
+  licenseType: 'free',
+  licenseCount: 1
+};
+
 /* ─── BUNDLE SERVICES ────────────────────────────────────────────── */
-const BUNDLE = ["Databricks","Storage account","Data Factory","Automation Account","Log Analytics","Keyvault"];
+const BUNDLE = ["Databricks","Storage account","Data Factory","Automation Account","Log Analytics","Keyvault (BYOK)"];
 
 function buildBundleCard(grid) {
   // Pre-select all bundle services
@@ -655,10 +709,19 @@ function buildBundleCard(grid) {
 
     const nm = document.createElement('div');
     nm.className = 'bundle-svc-name';
-    nm.textContent = name;
+    nm.textContent = name;  // "Keyvault (BYOK)" already in BUNDLE array
 
     svc.appendChild(iconDiv);
     svc.appendChild(nm);
+
+    // Add encryption sub-label for Keyvault (BYOK)
+    if (name === 'Keyvault (BYOK)') {
+      const encLbl = document.createElement('div');
+      encLbl.className = 'bundle-svc-sublabel';
+      encLbl.textContent = 'Encryption — eXtollo Services';
+      svc.appendChild(encLbl);
+    }
+
     svcsRow.appendChild(svc);
   });
 
@@ -710,7 +773,9 @@ function buildGrid(list, gridId, type) {
     // For special services the qty = instance/cluster count
     const NXT_SPECIAL = ['Kubernetes','Azure OpenAI','Azure AI Search','Azure AI Document Intelligence',
                          'Azure Machine Learning','Azure AI Content Safety','Azure AI Language'];
-    if (type === 'nxt') {
+    // These services do NOT get a qty dropdown in neXtollo
+    const NXT_NO_QTY = ['PowerBI Fabric Shared','Microsoft Fabric','Keyvault (BYOK)'];
+    if (type === 'nxt' && !NXT_NO_QTY.includes(name)) {
       const qtyRow = document.createElement('div');
       qtyRow.className = 'svc-qty-row';
       const qtyLbl = document.createElement('span');
@@ -736,26 +801,280 @@ function buildGrid(list, gridId, type) {
     }
 
     // Extra info / quantity rows for special services
-    // For nxt Kubernetes: nxtQty dropdown is the cluster count — no separate input needed
+    // eXtollo Kubernetes: 1 cluster only, no dropdown
     if (name === 'Kubernetes' && type === 'ext') {
-      const qKey = type + '_k8s';
-      const qRow = document.createElement('div');
-      qRow.className = 'qty-row';
-      qRow.innerHTML = `<span class="qty-label">Clusters × €450/mo:</span>`;
-      const qIn = document.createElement('input');
-      qIn.type = 'number'; qIn.className = 'qty-input'; qIn.min = 1; qIn.value = qty[qKey];
-      qIn.addEventListener('input', e => { qty[qKey] = Math.max(1, parseInt(e.target.value)||1); });
-      qRow.appendChild(qIn);
-      info.appendChild(qRow);
       const note = document.createElement('div');
-      note.className = 'svc-extra'; note.textContent = '€450 per cluster/month';
+      note.className = 'svc-extra'; note.textContent = '1 cluster · €450/month';
       info.appendChild(note);
     }
-    // For nxt Kubernetes: show surcharge note only (qty drives cluster count via dropdown)
+    // neXtollo Kubernetes: nxtQty dropdown is the cluster count
     if (name === 'Kubernetes' && type === 'nxt') {
       const note = document.createElement('div');
       note.className = 'svc-extra'; note.textContent = '€450 per cluster/month';
       info.appendChild(note);
+    }
+
+    // eXtollo qty dropdown (1-10) for supported services
+    if (type === 'ext' && EXT_QTY_SERVICES.includes(name)) {
+      const qtyRow = document.createElement('div');
+      qtyRow.className = 'svc-qty-row';
+      const qtyLbl = document.createElement('span');
+      qtyLbl.className = 'svc-qty-label';
+      qtyLbl.textContent = 'Qty:';
+      const qtySel = document.createElement('select');
+      qtySel.className = 'svc-qty-select ext-select';
+      for (let v = 1; v <= 10; v++) {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        if (v === (extQty[name] || 1)) opt.selected = true;
+        qtySel.appendChild(opt);
+      }
+      qtySel.addEventListener('change', function(e) {
+        e.stopPropagation();
+        extQty[name] = parseInt(this.value);
+      });
+      qtyRow.appendChild(qtyLbl);
+      qtyRow.appendChild(qtySel);
+      info.appendChild(qtyRow);
+    }
+
+    // PowerBI Fabric Shared — SKU + License dropdowns (eXtollo only)
+    if (type === 'ext' && name === 'PowerBI Fabric Shared') {
+      // SKU dropdown
+      const skuRow = document.createElement('div');
+      skuRow.className = 'svc-qty-row';
+      const skuLbl = document.createElement('span');
+      skuLbl.className = 'svc-qty-label'; skuLbl.textContent = 'SKU:';
+      const skuSel = document.createElement('select');
+      skuSel.className = 'svc-qty-select ext-select';
+      [['170','2CU · €170'],['340','4CU · €340'],['680','8CU · €680']].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (parseInt(v) === pbiState.sku) opt.selected = true;
+        skuSel.appendChild(opt);
+      });
+      skuSel.addEventListener('change', function(e) { e.stopPropagation(); pbiState.sku = parseInt(this.value); });
+      skuRow.appendChild(skuLbl); skuRow.appendChild(skuSel);
+      info.appendChild(skuRow);
+
+      // License dropdown
+      const licRow = document.createElement('div');
+      licRow.className = 'svc-qty-row';
+      const licLbl = document.createElement('span');
+      licLbl.className = 'svc-qty-label'; licLbl.textContent = 'IT-Shop:';
+      const licSel = document.createElement('select');
+      licSel.className = 'svc-qty-select ext-select';
+      [['free','Free · €0.00'],['pro','Pro · €5.25/user']].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === pbiState.licenseType) opt.selected = true;
+        licSel.appendChild(opt);
+      });
+      licSel.addEventListener('change', function(e) { e.stopPropagation(); pbiState.licenseType = this.value; });
+      licRow.appendChild(licLbl); licRow.appendChild(licSel);
+      info.appendChild(licRow);
+
+      // Pro license count (shown only for pro, but we always render it)
+      const licQtyRow = document.createElement('div');
+      licQtyRow.className = 'svc-qty-row pbi-pro-count';
+      licQtyRow.style.display = pbiState.licenseType === 'pro' ? 'flex' : 'none';
+      const licQtyLbl = document.createElement('span');
+      licQtyLbl.className = 'svc-qty-label'; licQtyLbl.textContent = 'Users:';
+      const licQtyIn = document.createElement('input');
+      licQtyIn.type = 'number'; licQtyIn.className = 'qty-input';
+      licQtyIn.min = 1; licQtyIn.value = pbiState.licenseCount;
+      licQtyIn.style.width = '46px';
+      licQtyIn.addEventListener('input', function(e) {
+        e.stopPropagation();
+        pbiState.licenseCount = Math.max(1, parseInt(this.value)||1);
+      });
+      licQtyRow.appendChild(licQtyLbl); licQtyRow.appendChild(licQtyIn);
+      info.appendChild(licQtyRow);
+
+      licSel.addEventListener('change', function() {
+        licQtyRow.style.display = this.value === 'pro' ? 'flex' : 'none';
+      });
+    }
+
+    // PowerBI Fabric Dedicated — SKU + License dropdowns (eXtollo only)
+    if (type === 'ext' && name === 'PowerBI Fabric Dedicated') {
+      // Minimum 12 months note
+      const minNote = document.createElement('div');
+      minNote.className = 'svc-extra';
+      minNote.textContent = 'Min. 12-month commitment';
+      info.appendChild(minNote);
+
+      // SKU dropdown
+      const skuRow = document.createElement('div');
+      skuRow.className = 'svc-qty-row';
+      const skuLbl = document.createElement('span');
+      skuLbl.className = 'svc-qty-label'; skuLbl.textContent = 'SKU:';
+      const skuSel = document.createElement('select');
+      skuSel.className = 'svc-qty-select ext-select';
+      [
+        ['5000', 'F64 · €5,000/mo (€60,000/yr)'],
+        ['8000', 'F128 · €8,000/mo (€96,000/yr)'],
+        ['14000','F256 · €14,000/mo (€168,000/yr)']
+      ].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (parseInt(v) === pbiDedState.sku) opt.selected = true;
+        skuSel.appendChild(opt);
+      });
+      skuSel.addEventListener('change', function(e) { e.stopPropagation(); pbiDedState.sku = parseInt(this.value); });
+      skuRow.appendChild(skuLbl); skuRow.appendChild(skuSel);
+      info.appendChild(skuRow);
+
+      // IT-Shop License dropdown
+      const licRow = document.createElement('div');
+      licRow.className = 'svc-qty-row';
+      const licLbl = document.createElement('span');
+      licLbl.className = 'svc-qty-label'; licLbl.textContent = 'IT-Shop:';
+      const licSel = document.createElement('select');
+      licSel.className = 'svc-qty-select ext-select';
+      [['free','Free · €0.00'],['pro','Pro · €5.25/user']].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === pbiDedState.licenseType) opt.selected = true;
+        licSel.appendChild(opt);
+      });
+      licSel.addEventListener('change', function(e) { e.stopPropagation(); pbiDedState.licenseType = this.value; licQtyRowDed.style.display = this.value === 'pro' ? 'flex' : 'none'; });
+      licRow.appendChild(licLbl); licRow.appendChild(licSel);
+      info.appendChild(licRow);
+
+      // Pro user count
+      const licQtyRowDed = document.createElement('div');
+      licQtyRowDed.className = 'svc-qty-row';
+      licQtyRowDed.style.display = pbiDedState.licenseType === 'pro' ? 'flex' : 'none';
+      const licQtyLbl = document.createElement('span');
+      licQtyLbl.className = 'svc-qty-label'; licQtyLbl.textContent = 'Users:';
+      const licQtyIn = document.createElement('input');
+      licQtyIn.type = 'number'; licQtyIn.className = 'qty-input';
+      licQtyIn.min = 1; licQtyIn.value = pbiDedState.licenseCount;
+      licQtyIn.style.width = '46px';
+      licQtyIn.addEventListener('input', function(e) { e.stopPropagation(); pbiDedState.licenseCount = Math.max(1, parseInt(this.value)||1); });
+      licQtyRowDed.appendChild(licQtyLbl); licQtyRowDed.appendChild(licQtyIn);
+      info.appendChild(licQtyRowDed);
+    }
+
+    // PowerBI Fabric Shared — SKU + License dropdowns (neXtollo)
+    if (type === 'nxt' && name === 'PowerBI Fabric Shared') {
+      // SKU dropdown
+      const skuRow = document.createElement('div');
+      skuRow.className = 'svc-qty-row';
+      const skuLbl = document.createElement('span');
+      skuLbl.className = 'svc-qty-label'; skuLbl.textContent = 'SKU:';
+      const skuSel = document.createElement('select');
+      skuSel.className = 'svc-qty-select';
+      [['170','2CU · €170'],['340','4CU · €340'],['680','8CU · €680']].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (parseInt(v) === nxtPbiShState.sku) opt.selected = true;
+        skuSel.appendChild(opt);
+      });
+      skuSel.addEventListener('change', function(e) { e.stopPropagation(); nxtPbiShState.sku = parseInt(this.value); });
+      skuRow.appendChild(skuLbl); skuRow.appendChild(skuSel);
+      info.appendChild(skuRow);
+
+      // IT-Shop License dropdown
+      const licRow = document.createElement('div');
+      licRow.className = 'svc-qty-row';
+      const licLbl = document.createElement('span');
+      licLbl.className = 'svc-qty-label'; licLbl.textContent = 'IT-Shop:';
+      const licSel = document.createElement('select');
+      licSel.className = 'svc-qty-select';
+      [['free','Free · €0.00'],['pro','Pro · €5.25/user']].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === nxtPbiShState.licenseType) opt.selected = true;
+        licSel.appendChild(opt);
+      });
+      const licQtyRowNxt = document.createElement('div');
+      licQtyRowNxt.className = 'svc-qty-row';
+      licQtyRowNxt.style.display = nxtPbiShState.licenseType === 'pro' ? 'flex' : 'none';
+      licSel.addEventListener('change', function(e) {
+        e.stopPropagation();
+        nxtPbiShState.licenseType = this.value;
+        licQtyRowNxt.style.display = this.value === 'pro' ? 'flex' : 'none';
+      });
+      licRow.appendChild(licLbl); licRow.appendChild(licSel);
+      info.appendChild(licRow);
+
+      // Pro user count
+      const licQtyLbl = document.createElement('span');
+      licQtyLbl.className = 'svc-qty-label'; licQtyLbl.textContent = 'Users:';
+      const licQtyIn = document.createElement('input');
+      licQtyIn.type = 'number'; licQtyIn.className = 'qty-input';
+      licQtyIn.min = 1; licQtyIn.value = nxtPbiShState.licenseCount;
+      licQtyIn.style.width = '46px';
+      licQtyIn.addEventListener('input', function(e) { e.stopPropagation(); nxtPbiShState.licenseCount = Math.max(1, parseInt(this.value)||1); });
+      licQtyRowNxt.appendChild(licQtyLbl); licQtyRowNxt.appendChild(licQtyIn);
+      info.appendChild(licQtyRowNxt);
+    }
+
+    // Microsoft Fabric (neXtollo) — same logic as PowerBI Fabric Dedicated
+    if (type === 'nxt' && name === 'Microsoft Fabric') {
+      // Min 12-month note
+      const fabNote = document.createElement('div');
+      fabNote.className = 'svc-extra';
+      fabNote.textContent = 'Min. 12-month commitment';
+      info.appendChild(fabNote);
+
+      // SKU dropdown
+      const skuRow = document.createElement('div');
+      skuRow.className = 'svc-qty-row';
+      const skuLbl = document.createElement('span');
+      skuLbl.className = 'svc-qty-label'; skuLbl.textContent = 'SKU:';
+      const skuSel = document.createElement('select');
+      skuSel.className = 'svc-qty-select';
+      [
+        ['5000', 'F64 · €5,000/mo (€60,000/yr)'],
+        ['8000', 'F128 · €8,000/mo (€96,000/yr)'],
+        ['14000','F256 · €14,000/mo (€168,000/yr)']
+      ].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (parseInt(v) === nxtFabricState.sku) opt.selected = true;
+        skuSel.appendChild(opt);
+      });
+      skuSel.addEventListener('change', function(e) { e.stopPropagation(); nxtFabricState.sku = parseInt(this.value); });
+      skuRow.appendChild(skuLbl); skuRow.appendChild(skuSel);
+      info.appendChild(skuRow);
+
+      // IT-Shop License dropdown
+      const licRow = document.createElement('div');
+      licRow.className = 'svc-qty-row';
+      const licLbl = document.createElement('span');
+      licLbl.className = 'svc-qty-label'; licLbl.textContent = 'IT-Shop:';
+      const licSel = document.createElement('select');
+      licSel.className = 'svc-qty-select';
+      [['free','Free · €0.00'],['pro','Pro · €5.25/user']].forEach(([v,t]) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = t;
+        if (v === nxtFabricState.licenseType) opt.selected = true;
+        licSel.appendChild(opt);
+      });
+      const licQtyRowFab = document.createElement('div');
+      licQtyRowFab.className = 'svc-qty-row';
+      licQtyRowFab.style.display = nxtFabricState.licenseType === 'pro' ? 'flex' : 'none';
+      licSel.addEventListener('change', function(e) {
+        e.stopPropagation();
+        nxtFabricState.licenseType = this.value;
+        licQtyRowFab.style.display = this.value === 'pro' ? 'flex' : 'none';
+      });
+      licRow.appendChild(licLbl); licRow.appendChild(licSel);
+      info.appendChild(licRow);
+
+      // Pro user count
+      const licQtyLbl = document.createElement('span');
+      licQtyLbl.className = 'svc-qty-label'; licQtyLbl.textContent = 'Users:';
+      const licQtyIn = document.createElement('input');
+      licQtyIn.type = 'number'; licQtyIn.className = 'qty-input';
+      licQtyIn.min = 1; licQtyIn.value = nxtFabricState.licenseCount;
+      licQtyIn.style.width = '46px';
+      licQtyIn.addEventListener('input', function(e) { e.stopPropagation(); nxtFabricState.licenseCount = Math.max(1, parseInt(this.value)||1); });
+      licQtyRowFab.appendChild(licQtyLbl); licQtyRowFab.appendChild(licQtyIn);
+      info.appendChild(licQtyRowFab);
     }
 
     if (type === 'nxt' && name === 'Webapp') {
@@ -795,29 +1114,61 @@ function buildGrid(list, gridId, type) {
 
     card.appendChild(info);
 
-    // Add / Remove button
-    const btn = document.createElement('button');
-    btn.className = 'add-btn' + (added ? ' added' : '');
-    btn.textContent = added ? '✓ Added' : '+ Add';
-    btn.style.position = 'relative'; btn.style.zIndex = '2';
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (sel[type].has(name)) {
-        sel[type].delete(name);
-        btn.textContent = '+ Add';
-        btn.classList.remove('added');
-        card.classList.remove('added');
-      } else {
-        sel[type].add(name);
-        btn.textContent = '✓ Added';
-        btn.classList.add('added');
-        card.classList.add('added');
-      }
-      refreshCounts();
-    });
-    card.appendChild(btn);
+    // Keyvault (BYOK) in neXtollo — no Add button, auto-managed by syncByok()
+    if (type === 'nxt' && name === 'Keyvault (BYOK)') {
+      card.id = 'nxt-byok-card';
+      const lockBadge = document.createElement('span');
+      lockBadge.id = 'nxt-byok-badge';
+      lockBadge.className = 'byok-lock-badge' + (added ? ' active' : '');
+      lockBadge.title = 'Automatically included whenever any neXtollo service is selected';
+      lockBadge.innerHTML = '🔒&nbsp;Auto-included';
+      card.appendChild(lockBadge);
+    } else {
+      // Add / Remove button (all other services)
+      const btn = document.createElement('button');
+      btn.className = 'add-btn' + (added ? ' added' : '');
+      btn.textContent = added ? '✓ Added' : '+ Add';
+      btn.style.position = 'relative'; btn.style.zIndex = '2';
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (sel[type].has(name)) {
+          sel[type].delete(name);
+          btn.textContent = '+ Add';
+          btn.classList.remove('added');
+          card.classList.remove('added');
+        } else {
+          sel[type].add(name);
+          btn.textContent = '✓ Added';
+          btn.classList.add('added');
+          card.classList.add('added');
+        }
+        if (type === 'nxt') syncByok();
+        refreshCounts();
+      });
+      card.appendChild(btn);
+    }
     grid.appendChild(card);
   });
+  refreshCounts();
+}
+
+/* ─── SYNC Keyvault (BYOK) — auto-include in neXtollo ───────────── */
+// Called after every neXtollo service toggle and after clearAll.
+// BYOK is added automatically when ≥1 other NXT service is selected,
+// and removed when all other NXT services are deselected.
+function syncByok() {
+  const otherNxt = [...sel.nxt].filter(s => s !== 'Keyvault (BYOK)').length;
+  const byokCard  = document.getElementById('nxt-byok-card');
+  const byokBadge = document.getElementById('nxt-byok-badge');
+  if (otherNxt > 0) {
+    sel.nxt.add('Keyvault (BYOK)');
+    if (byokCard)  byokCard.classList.add('added');
+    if (byokBadge) byokBadge.className = 'byok-lock-badge active';
+  } else {
+    sel.nxt.delete('Keyvault (BYOK)');
+    if (byokCard)  byokCard.classList.remove('added');
+    if (byokBadge) byokBadge.className = 'byok-lock-badge';
+  }
   refreshCounts();
 }
 
@@ -825,10 +1176,16 @@ function buildGrid(list, gridId, type) {
 function clearAll() {
   sel.ext.clear();
   sel.nxt.clear();
-  // Reset all neXtollo qty dropdowns to 1 BEFORE rebuilding the grid
+  // Reset all qty dropdowns to 1 BEFORE rebuilding the grids
   NXT.forEach(s => { nxtQty[s] = 1; });
+  EXT_QTY_SERVICES.forEach(s => { extQty[s] = 1; });
+  pbiState.sku = 170; pbiState.licenseType = 'free'; pbiState.licenseCount = 1;
+  pbiDedState.sku = 5000; pbiDedState.licenseType = 'free'; pbiDedState.licenseCount = 1;
+  nxtPbiShState.sku = 170; nxtPbiShState.licenseType = 'free'; nxtPbiShState.licenseCount = 1;
+  nxtFabricState.sku = 5000; nxtFabricState.licenseType = 'free'; nxtFabricState.licenseCount = 1;
   buildGrid(EXT, 'extGrid', 'ext');  // buildGrid re-adds bundle services automatically
   buildGrid(NXT, 'nxtGrid', 'nxt');  // dropdowns now render with value=1
+  syncByok();  // ensure BYOK state is clean after full reset
   refreshCounts();
   // Also clear the consumption input
   const inp = document.getElementById('consumptionInput');
@@ -857,10 +1214,30 @@ function euro(n) { return '\u20ac' + n.toLocaleString('de-DE', {minimumFractionD
 
 /* ─── PRICING ────────────────────────────────────────────────────── */
 function calcExt(c) {
-  const k8sCost = sel.ext.has('Kubernetes') ? qty.ext_k8s * 450 : 0;
-  const margin  = c * 0.20;
-  const total   = 900 + c + margin + k8sCost;
-  return { fixed:900, consumption:c, margin, k8sCost, total };
+  // Kubernetes: fixed 1 cluster = €450
+  const k8sCost    = sel.ext.has('Kubernetes') ? 450 : 0;
+
+  // PowerBI Fabric Shared
+  const pbiShSku   = sel.ext.has('PowerBI Fabric Shared') ? pbiState.sku : 0;
+  const pbiShLic   = sel.ext.has('PowerBI Fabric Shared') && pbiState.licenseType === 'pro'
+                     ? pbiState.licenseCount * 5.25 : 0;
+  const pbiShCost  = pbiShSku + pbiShLic;
+  // Alias for legacy refs
+  const pbiSku = pbiShSku; const pbiLic = pbiShLic; const pbiCost = pbiShCost;
+
+  // PowerBI Fabric Dedicated (monthly portion — billed annually, shown as monthly)
+  const pbiDedSku  = sel.ext.has('PowerBI Fabric Dedicated') ? pbiDedState.sku : 0;
+  const pbiDedLic  = sel.ext.has('PowerBI Fabric Dedicated') && pbiDedState.licenseType === 'pro'
+                     ? pbiDedState.licenseCount * 5.25 : 0;
+  const pbiDedCost = pbiDedSku + pbiDedLic;
+
+  // AAD Class 3 Application: €111.12 per webapp per month
+  const extWebappQty = sel.ext.has('Webapp') ? (extQty['Webapp'] || 1) : 0;
+  const aadExtCost   = extWebappQty * 111.12;
+
+  const margin     = c * 0.20;
+  const total      = 900 + c + margin + k8sCost + pbiShCost + pbiDedCost + aadExtCost;
+  return { fixed:900, consumption:c, margin, k8sCost, pbiSku, pbiLic, pbiCost, pbiDedSku, pbiDedLic, pbiDedCost, aadExtCost, extWebappQty, total };
 }
 
 const AI_SERVICES = [
@@ -878,14 +1255,28 @@ function calcNxt(c) {
     .filter(s => sel.nxt.has(s))
     .map(s => ({ name: s, qty: nxtQty[s] || 1, cost: (nxtQty[s] || 1) * 100 }));
   const aiCost = aiBreakdown.reduce((sum, a) => sum + a.cost, 0);
+  // PowerBI Fabric Shared (neXtollo)
+  const nxtPbiSku  = sel.nxt.has('PowerBI Fabric Shared') ? nxtPbiShState.sku : 0;
+  const nxtPbiLic  = sel.nxt.has('PowerBI Fabric Shared') && nxtPbiShState.licenseType === 'pro'
+                     ? nxtPbiShState.licenseCount * 5.25 : 0;
+  const nxtPbiCost = nxtPbiSku + nxtPbiLic;
   // Tier: <10000 → 32% min €1000 | 10001–50000 → 27% | >50001 → 22%
   let rate, minFee;
   if (c < 10001)       { rate = 0.32; minFee = 1000; }
   else if (c < 50001)  { rate = 0.27; minFee = 0; }
   else                 { rate = 0.22; minFee = 0; }
   const fee = Math.max(c * rate, minFee);
-  const total = c + fee + k8sCost + appPlanCost + aiCost;
-  return { consumption:c, rate, fee, k8sCost, webappCost, funcCost, appPlanCost, aiBreakdown, aiCost, total };
+  // AAD Class 3 Application: €111.12 per app service plan per month
+  const totalAppPlans = (sel.nxt.has('Webapp') ? (qty.nxt_webapp_plans||1) : 0)
+                      + (sel.nxt.has('Function app') ? (qty.nxt_func_plans||1) : 0);
+  const aadNxtCost    = totalAppPlans * 111.12;
+  // Microsoft Fabric (neXtollo) — same SKU structure as PowerBI Fabric Dedicated
+  const fabricSku  = sel.nxt.has('Microsoft Fabric') ? nxtFabricState.sku : 0;
+  const fabricLic  = sel.nxt.has('Microsoft Fabric') && nxtFabricState.licenseType === 'pro'
+                     ? nxtFabricState.licenseCount * 5.25 : 0;
+  const fabricCost = fabricSku + fabricLic;
+  const total = c + fee + k8sCost + appPlanCost + aiCost + nxtPbiCost + aadNxtCost + fabricCost;
+  return { consumption:c, rate, fee, k8sCost, webappCost, funcCost, appPlanCost, aiBreakdown, aiCost, nxtPbiSku, nxtPbiLic, nxtPbiCost, aadNxtCost, totalAppPlans, fabricSku, fabricLic, fabricCost, total };
 }
 
 /* ─── GO TO RESULTS ──────────────────────────────────────────────── */
@@ -945,27 +1336,71 @@ function goToResults() {
   let cardsHTML = '';
 
   if (hasExt) {
-    const extChips = '<div class="chips">'+[...sel.ext].map(s=>'<span class="chip">'+s+'</span>').join('')+'</div>';
+    const extChips = '<div class="chips">'+[...sel.ext].map(s=>'<span class="chip">'+s+(EXT_QTY_SERVICES.includes(s)&&extQty[s]>1?' ×'+extQty[s]:'')+'</span>').join('')+'</div>';
     let extRows =
       '<div class="breakdown-row"><span class="breakdown-label">Fixed Service Fee</span><span class="breakdown-value">\u20ac900.00</span></div>' +
       '<div class="breakdown-row"><span class="breakdown-label">Azure Consumption</span><span class="breakdown-value">'+euro(e.consumption)+'</span></div>' +
       '<div class="breakdown-row hi-ext"><span class="breakdown-label">Platform automation and self-service (20%)</span><span class="breakdown-value v-ext">+ '+euro(e.margin)+'</span></div>';
-    if (e.k8sCost > 0) extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Kubernetes ('+qty.ext_k8s+' cluster × \u20ac450)</span><span class="breakdown-value v-warn">+ '+euro(e.k8sCost)+'</span></div>';
+    if (e.k8sCost > 0) extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Kubernetes (1 cluster × €450)</span><span class="breakdown-value v-warn">+ '+euro(e.k8sCost)+'</span></div>';
+    // PowerBI Fabric Shared — always show license line when service is selected
+    if (e.pbiSku > 0) {
+      const skuLabel = e.pbiSku===170?'2CU':e.pbiSku===340?'4CU':'8CU';
+      extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">PowerBI Fabric Shared · SKU '+skuLabel+'</span><span class="breakdown-value v-warn">+ '+euro(e.pbiSku)+'</span></div>';
+      const shLicLabel = pbiState.licenseType==='pro'
+        ? 'IT-Shop Pro ('+pbiState.licenseCount+' user(s) × €5.25)'
+        : 'IT-Shop License · Free';
+      const shLicVal = pbiState.licenseType==='pro' ? '+ '+euro(e.pbiLic) : '€0.00';
+      extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">PowerBI Shared '+shLicLabel+'</span><span class="breakdown-value v-warn">'+shLicVal+'</span></div>';
+    }
+    // PowerBI Fabric Dedicated — always show license line when service is selected
+    if (e.pbiDedSku > 0) {
+      const dedLabel = e.pbiDedSku===5000?'F64':e.pbiDedSku===8000?'F128':'F256';
+      const dedYearly = e.pbiDedSku * 12;
+      extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">PowerBI Fabric Dedicated · SKU '+dedLabel+' (12-month min · €'+dedYearly.toLocaleString('de-DE')+'/yr)</span><span class="breakdown-value v-warn">+ '+euro(e.pbiDedSku)+'/mo</span></div>';
+      const dedLicLabel = pbiDedState.licenseType==='pro'
+        ? 'IT-Shop Pro ('+pbiDedState.licenseCount+' user(s) × €5.25)'
+        : 'IT-Shop License · Free';
+      const dedLicVal = pbiDedState.licenseType==='pro' ? '+ '+euro(e.pbiDedLic) : '€0.00';
+      extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">PowerBI Dedicated '+dedLicLabel+'</span><span class="breakdown-value v-warn">'+dedLicVal+'</span></div>';
+    }
+    if (e.aadExtCost > 0) extRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">AAD Class 3 Application ('+e.extWebappQty+' Webapp(s) × €111.12)</span><span class="breakdown-value v-warn">+ '+euro(e.aadExtCost)+'</span></div>';
     extRows += '<div class="total-row"><span class="total-label">Total Monthly</span><span class="total-amount">'+euro(e.total)+'</span></div>';
     cardsHTML += '<div class="result-card ext"><div class="result-card-header"><div class="product-name">eXtollo</div><div class="product-sub">Fixed Fee Model</div></div><div class="result-breakdown">'+extRows+'</div><div class="services-used"><h4>Selected Services ('+sel.ext.size+')</h4>'+extChips+'</div></div>';
   }
 
   if (hasNxt) {
-    const nxtChips = '<div class="chips">'+[...sel.nxt].map(s=>'<span class="chip">'+s+(nxtQty[s]>1?' ×'+nxtQty[s]:'')+'</span>').join('')+'</div>';
+    const nxtChips = '<div class="chips">'+[...sel.nxt].map(s => s === 'Keyvault (BYOK)' ? '<span class="chip" style="border-color:rgba(0,229,176,0.4);color:#00e5b0">🔒 ' + s + '</span>' : '<span class="chip">' + s + (nxtQty[s] > 1 ? ' ×' + nxtQty[s] : '') + '</span>').join('') + '</div>';
     let nxtRows =
       '<div class="breakdown-row"><span class="breakdown-label">Azure Consumption</span><span class="breakdown-value">'+euro(n.consumption)+'</span></div>' +
       '<div class="breakdown-row hi-nxt"><span class="breakdown-label">neXtollo Fee \u00b7 '+tier+'</span><span class="breakdown-value v-nxt">+ '+euro(n.fee)+'</span></div>';
     if (n.k8sCost > 0)     nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Kubernetes ('+(nxtQty['Kubernetes']||1)+' cluster(s) × \u20ac450)</span><span class="breakdown-value v-warn">+ '+euro(n.k8sCost)+'</span></div>';
     if (n.webappCost > 0)  nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Webapp App Plans ('+(qty.nxt_webapp_plans||1)+' × \u20ac100)</span><span class="breakdown-value v-warn">+ '+euro(n.webappCost)+'</span></div>';
     if (n.funcCost > 0)    nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Function App Plans ('+(qty.nxt_func_plans||1)+' × \u20ac100)</span><span class="breakdown-value v-warn">+ '+euro(n.funcCost)+'</span></div>';
+    if (n.aadNxtCost > 0) nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">AAD Class 3 Application ('+n.totalAppPlans+' app plan(s) × €111.12)</span><span class="breakdown-value v-warn">+ '+euro(n.aadNxtCost)+'</span></div>';
     n.aiBreakdown.forEach(a => {
       nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">'+a.name+' ('+a.qty+' instance(s) × \u20ac100)</span><span class="breakdown-value v-warn">+ '+euro(a.cost)+'</span></div>';
     });
+    // PowerBI Fabric Shared (neXtollo) — always show when selected
+    if (n.nxtPbiSku > 0) {
+      const nxtSkuLabel = n.nxtPbiSku===170?'2CU':n.nxtPbiSku===340?'4CU':'8CU';
+      nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">PowerBI Fabric Shared · SKU '+nxtSkuLabel+'</span><span class="breakdown-value v-warn">+ '+euro(n.nxtPbiSku)+'</span></div>';
+      const nxtLicLabel = nxtPbiShState.licenseType==='pro'
+        ? 'IT-Shop Pro ('+nxtPbiShState.licenseCount+' user(s) × €5.25)'
+        : 'IT-Shop License · Free';
+      const nxtLicVal = nxtPbiShState.licenseType==='pro' ? '+ '+euro(n.nxtPbiLic) : '€0.00';
+      nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">PowerBI Shared '+nxtLicLabel+'</span><span class="breakdown-value v-warn">'+nxtLicVal+'</span></div>';
+    }
+    // Microsoft Fabric (neXtollo) — always show when selected
+    if (n.fabricSku > 0) {
+      const fabLabel = n.fabricSku===5000?'F64':n.fabricSku===8000?'F128':'F256';
+      const fabYearly = n.fabricSku * 12;
+      nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Microsoft Fabric · SKU '+fabLabel+' (12-month min · €'+fabYearly.toLocaleString('de-DE')+'/yr)</span><span class="breakdown-value v-warn">+ '+euro(n.fabricSku)+'/mo</span></div>';
+      const fabLicLabel = nxtFabricState.licenseType==='pro'
+        ? 'IT-Shop Pro ('+nxtFabricState.licenseCount+' user(s) × €5.25)'
+        : 'IT-Shop License · Free';
+      const fabLicVal = nxtFabricState.licenseType==='pro' ? '+ '+euro(n.fabricLic) : '€0.00';
+      nxtRows += '<div class="breakdown-row hi-warn"><span class="breakdown-label">Microsoft Fabric '+fabLicLabel+'</span><span class="breakdown-value v-warn">'+fabLicVal+'</span></div>';
+    }
     nxtRows += '<div class="total-row"><span class="total-label">Total Monthly</span><span class="total-amount">'+euro(n.total)+'</span></div>';
     cardsHTML += '<div class="result-card nxt"><div class="result-card-header"><div class="product-name">neXtollo</div><div class="product-sub">Consumption Fee Model</div></div><div class="result-breakdown">'+nxtRows+'</div><div class="services-used"><h4>Selected Services ('+sel.nxt.size+')</h4>'+nxtChips+'</div></div>';
   }
